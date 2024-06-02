@@ -16,4 +16,4 @@ git log
 
 If we want to move all the files to staging area by single git command we can use
 git add .
-
+git
