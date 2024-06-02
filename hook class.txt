@@ -1,0 +1,213 @@
+using AutomationTests.Sense.Framework;
+using BoDi;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using OpenQA.Selenium;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using TechTalk.SpecFlow;
+using TechTalk.SpecFlow.Infrastructure;
+
+namespace AutomationTests.Sense.Tests.SpecFlow.Steps
+{
+    public class TestResultDetails
+    {
+        private string folderName;
+
+        public string FolderName
+        {
+            get { return folderName; }
+            set { folderName = value; }
+        }
+    }
+
+
+    [Binding]
+    public class HookSteps
+    {
+        private readonly ISpecFlowOutputHelper _specFlowOutputHelper;
+        private readonly ScenarioContext _scenarioContext;
+        private static IObjectContainer _globalContainer;
+        public string NewStudy = "";
+
+        public HookSteps(TestContext context, ISpecFlowOutputHelper specFlowOutputHelper, ScenarioContext scenarioContext)
+        {
+            _specFlowOutputHelper = specFlowOutputHelper;
+            _scenarioContext = scenarioContext;
+        }
+
+        /// <summary>
+        /// Before test run starts it will create a new folder in C:\Temp\Results folder with date and time of execution
+        /// </summary>
+        /// <param name="globalContainer">IObjectContainer</param>
+        [BeforeTestRun]
+        public static void CreateFolderForScreenshotWithCurrentDateTime(IObjectContainer globalContainer, TestContext context)
+        {
+
+            string releaseName = context.Properties["ReleaseName"].ToString();
+
+            //string dateTimeOfExecution = DateTime.Now.ToString("ddMMMMyyyy_HHmmss");
+            string artifactDirectory = Path.Combine("C:\\Temp\\", "Results", releaseName);
+            if (!Directory.Exists(artifactDirectory))
+                Directory.CreateDirectory(artifactDirectory);
+            TestResultDetails trd = new TestResultDetails();
+            trd.FolderName = releaseName;
+            globalContainer.RegisterInstanceAs<TestResultDetails>(trd);
+            _globalContainer = globalContainer;
+        }
+
+        [BeforeFeature]
+        public static void StoreFolderNameInScenarioContext(IObjectContainer objectContainer)
+        {
+            FeatureContext.Current.Add("FolderName", _globalContainer.Resolve<TestResultDetails>().FolderName);
+        }
+
+        /// <summary>
+        /// Before every scenario it will open a new browser if required, otherwise will use the existing open browser. 
+        /// Will also login if not logged in already.
+        /// </summary>
+        /// <param name="context">TestContext</param>
+        [BeforeFeature]
+        public static void BeforeScenarioStartBrowserAndLogin(TestContext context)
+        {
+            if (FeatureContext.Current.FeatureInfo.Tags.Contains("ignoreBeforeFeature"))
+            {
+                return;
+            }
+            else
+            {
+                var testSettings = new TestSettings()
+                {
+                    BaseTestURL = context.Properties["baseTestURL"].ToString(),
+                    Browser = context.Properties["browser"].ToString(),
+                    ImplicitWaitSeconds = Convert.ToInt32(context.Properties["implicitWait"]),
+                    PageLoadWaitSeconds = Convert.ToInt32(context.Properties["pageLoadWait"]),
+                    PolicyLoadWaitSeconds = Convert.ToInt32(context.Properties["policyWait"]),
+                    WaitUntilTimeoutSeconds = Convert.ToInt32(context.Properties["WaitUntilTimeout"]),
+                    ValidUserName = context.Properties["validUsername"].ToString(),
+                    ValidPassword = context.Properties["validPassword"].ToString()
+
+                };
+
+                TestManager.SetBaseTestURL(testSettings.BaseTestURL, testSettings.SecurityURL);
+                TestManager.SetAndOpenBrowser(testSettings);
+
+                TestManager.WebDriver.Navigate().Refresh();
+                TestManager.LoginPage.Login(testSettings.ValidUserName, testSettings.ValidPassword);
+                Thread.Sleep(2000);
+                System.Threading.Thread.Sleep(TestManager.PolicyLoadWaitMilliseconds);
+            }
+        }
+
+        /// <summary>
+        /// Before every scenario it will open a new browser if required, otherwise will use the existing open browser
+        /// </summary>
+        /// <parStartBrowserAndLoginBeforeScenarioam name="context">TestContext</param>
+        [BeforeScenario("StartBrowserBeforeScenario")]
+        public static void BeforeScenarioStartBrowser(TestContext context)
+        {
+            var testSettings = new TestSettings()
+            {
+                BaseTestURL = context.Properties["baseTestURL"].ToString(),
+                Browser = context.Properties["browser"].ToString(),
+                ImplicitWaitSeconds = Convert.ToInt32(context.Properties["implicitWait"]),
+                PageLoadWaitSeconds = Convert.ToInt32(context.Properties["pageLoadWait"]),
+                PolicyLoadWaitSeconds = Convert.ToInt32(context.Properties["policyWait"]),
+                WaitUntilTimeoutSeconds = Convert.ToInt32(context.Properties["WaitUntilTimeout"])
+            };
+
+            TestManager.SetBaseTestURL(testSettings.BaseTestURL, testSettings.SecurityURL);
+            TestManager.SetAndOpenBrowser(testSettings);
+        }
+
+
+        [BeforeScenario("NavigateToHomePageBeforeScenario")]
+        public static void BeforeScenarioNavigateToHomePage(TestContext context)
+        {
+            TestManager.LoginPage.Login(context.Properties["validUsername"].ToString(), context.Properties["validPassword"].ToString());
+            TestManager.NavigateToPage(TestManager.Pages.SenseHome);
+        }
+
+        [BeforeScenario("NavigateToExperimentDetailPage")]
+        public static void BeforeScenarioNavigateToExpDetailPage()
+        {
+            TestManager.VerifyPage(TestManager.Pages.SenseHome);
+
+            TestManager.SenseHomePage.WorkStreamExperimentFilter.Click();
+            List<IWebElement> Exp_list = new List<IWebElement>(TestManager.s_webDriverWait.Until(x => x.FindElements(By.XPath("//label[text()='Experiment' and contains(@class,'active')]//ancestor::div[contains(@class,'card-workstream')]//div[contains(@class,'scrollbar')]//a"))));
+            Random random = new Random(Exp_list.Count);
+            int i = random.Next(0, Exp_list.Count);
+            string expID = Exp_list[i].Text.Trim();
+            ScenarioContext.Current["expID"] = expID;
+            Exp_list[i].Click();
+
+            Thread.Sleep(2000);
+        }
+
+        /// <summary>
+        /// After the step it will take screenshot for error
+        /// </summary>
+        [AfterStep]
+        public void AfterStepScreenshotOnError(TestContext context)
+        {
+            if (ScenarioContext.Current.TestError != null)
+            {
+                TestManager.TakeScreenshot(_specFlowOutputHelper);
+            }
+        }
+
+        [AfterScenario]
+        public void GoToHomePage()
+        {
+            if (ScenarioContext.Current.ScenarioInfo.Tags.Contains("ignoreGoToHomePage"))
+            {
+                return;
+            }
+            else
+            {
+                TestManager.StudyDetailsPage.GoToHomePage.Click();
+                Thread.Sleep(2000);
+            }
+        }
+
+        [AfterScenario]
+        public void LogUserDetailsAfterScenario(TestContext context)
+        {
+            if (ScenarioContext.Current.ScenarioInfo.Tags.Contains("ignoreUserName"))
+            {
+                _specFlowOutputHelper.WriteLine("LoggedIn user details not specified as per test requirement .");
+            }
+            else if (FeatureContext.Current.FeatureInfo.Tags.Contains("ignoreBeforeFeature"))
+            {
+                _specFlowOutputHelper.WriteLine("Sense Application Logged in with " + ScenarioContext.Current["UserDetails"].ToString() + ".");
+            }
+            else
+            {
+                _specFlowOutputHelper.WriteLine("Sense Application Logged in with " + FeatureContext.Current["LoggedInUserName"].ToString() + ".");
+            }
+            //_specFlowOutputHelper.WriteLine("URL used: " + context.Properties["baseTestURL"].ToString() + ".");
+            _specFlowOutputHelper.WriteLine("The test ended at: " + DateTime.Now.ToString("G"));
+        }
+
+        /// <summary>
+        /// After the scenario it will quit the browser.
+        /// </summary>
+        [AfterScenario("CloseBrowserBeforeScenario")]
+        public static void AfterScenarioCloseBrowser()
+        {
+            TestManager.QuitBrowser();
+        }
+
+        /// <summary>
+        /// After the scenario it will quit the browser.
+        /// </summary>
+        [AfterFeature]
+        public static void AfterFeatureCloseBrowser()
+        {
+            TestManager.QuitBrowser();
+        }
+    }
+}
