@@ -1,0 +1,19 @@
+git config --global user.name
+git config --global user.email
+git config --global --edit (Trick after edit use escape button colon :wq)
+git status
+git add filename
+
+
+if there are multiple files at staging area and we want to commit specific file then use below command
+git commit filename --m "Commit comment"
+
+If we want to commit all the file in one go that is move them from staging are to commit.. we can simply use below command
+git commit --m "Commit comment"
+
+use command to know about all the commit made till date.. 
+git log
+
+If we want to move all the files to staging area by single git command we can use
+git add .
+git
