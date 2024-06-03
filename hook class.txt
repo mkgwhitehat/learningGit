@@ -1,4 +1,4 @@
-using AutomationTests.Sense.Framework;
+using AutomationTests.Sense.Framework
 using BoDi;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OpenQA.Selenium;
